@@ -1,5 +1,8 @@
 name: canals-orders
 
+# Users, passwords, database names, ports and URLs come from the .env file next to this one
+# (copy .env.example to .env).
+
 services:
   # On its first start, Postgres runs the scripts in db/init: it creates the tables, loads the demo
   # warehouses with their stock and creates the database the tests use.
@@ -7,16 +10,17 @@ services:
     image: postgres:16-alpine
     command: ["postgres", "-c", "max_connections=200"]
     environment:
-      POSTGRES_USER: canals
-      POSTGRES_PASSWORD: canals
-      POSTGRES_DB: canals
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_TEST_DB: ${POSTGRES_TEST_DB}
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U canals -d canals"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -24,7 +28,7 @@ services:
   geocoding-mock:
     build: ./mocks/geocoding
     ports:
-      - "8101:8000"
+      - "${GEOCODING_MOCK_PORT}:8000"
     volumes:
       - ./mocks/geocoding/addresses.json:/app/addresses.json:ro
     healthcheck:
@@ -36,7 +40,7 @@ services:
   payments-mock:
     build: ./mocks/payments
     ports:
-      - "8102:8000"
+      - "${PAYMENTS_MOCK_PORT}:8000"
     volumes:
       - ./mocks/payments/scenarios.json:/app/scenarios.json:ro
     healthcheck:
@@ -50,12 +54,12 @@ services:
   api:
     build: .
     environment:
-      DATABASE_URL: postgresql+psycopg://canals:canals@db:5432/canals
-      GEOCODING_URL: http://geocoding-mock:8000
-      PAYMENTS_URL: http://payments-mock:8000
-      WEB_CONCURRENCY: "4"
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      GEOCODING_URL: ${GEOCODING_URL}
+      PAYMENTS_URL: ${PAYMENTS_URL}
+      WEB_CONCURRENCY: "${WEB_CONCURRENCY}"
     ports:
-      - "8000:8000"
+      - "${API_PORT}:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -75,9 +79,9 @@ services:
     build: .
     command: python -m app.jobs.reconciler
     environment:
-      DATABASE_URL: postgresql+psycopg://canals:canals@db:5432/canals
-      GEOCODING_URL: http://geocoding-mock:8000
-      PAYMENTS_URL: http://payments-mock:8000
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      GEOCODING_URL: ${GEOCODING_URL}
+      PAYMENTS_URL: ${PAYMENTS_URL}
     depends_on:
       db:
         condition: service_healthy
@@ -96,7 +100,7 @@ services:
     volumes:
       - .:/app
     environment:
-      TEST_DATABASE_URL: postgresql+psycopg://canals:canals@db:5432/canals_test
+      TEST_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_TEST_DB}
     depends_on:
       db:
         condition: service_healthy

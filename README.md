@@ -13,18 +13,19 @@ run in their own containers.
 Needs Docker with Compose. From this folder:
 
 ```bash
+cp .env.example .env           # the settings: ports, credentials, URLs (skip it if .env exists)
 docker compose up -d --build
 ```
 
-That starts everything, in order:
+That starts everything, in order (the ports are the ones on your machine, set in `.env`):
 
-| Service | What it is | Port |
-|---|---|---|
-| `db` | PostgreSQL. **The first time it starts** it creates the tables and loads the demo warehouses with their stock (`db/init/`) | 5432 |
-| `geocoding-mock` | Turns an address into coordinates | 8101 |
-| `payments-mock` | Card payments provider (authorize, capture, cancel) | 8102 |
-| `api` | The orders API | **8000** |
-| `reconciler` | Finishes the orders left halfway, every 10 s | - |
+| Service | What it is | Port | Variable |
+|---|---|---|---|
+| `db` | PostgreSQL. **The first time it starts** it creates the tables and loads the demo warehouses with their stock (`db/init/`) | 5432 | `DB_PORT` |
+| `geocoding-mock` | Turns an address into coordinates | 8101 | `GEOCODING_MOCK_PORT` |
+| `payments-mock` | Card payments provider (authorize, capture, cancel) | 8102 | `PAYMENTS_MOCK_PORT` |
+| `api` | The orders API | **8000** | `API_PORT` |
+| `reconciler` | Finishes the orders left halfway, every 10 s | - | - |
 
 ```bash
 curl localhost:8000/health        # {"status":"ok", ...}
@@ -35,6 +36,26 @@ docker compose down -v            # stop and throw the data away: the next `up` 
 
 The scripts in `db/init/` only run when the database is created, so after changing them (or if you
 have a volume from an older version) run `docker compose down -v` first.
+
+### Configuration (`.env`)
+
+Nothing is written by hand in `docker-compose.yml`: the credentials, the database names, the
+published ports, the provider URLs and the number of API workers are read from the `.env` file next
+to it. `.env.example` is the template with the default values; `.env` itself is not meant to be
+committed. Edit a value and run `docker compose up -d` again (a variable exported in your shell
+wins over the file).
+
+| Variable | Default | What it sets |
+|---|---|---|
+| `POSTGRES_USER`, `POSTGRES_PASSWORD` | `canals`, `canals` | Database credentials, used by the services that connect to it |
+| `POSTGRES_DB`, `POSTGRES_TEST_DB` | `canals`, `canals_test` | The application database, and the one the tests use |
+| `DB_PORT`, `API_PORT`, `GEOCODING_MOCK_PORT`, `PAYMENTS_MOCK_PORT` | `5432`, `8000`, `8101`, `8102` | Ports published on your machine |
+| `WEB_CONCURRENCY` | `4` | Gunicorn worker processes of the API |
+| `GEOCODING_URL`, `PAYMENTS_URL` | `http://geocoding-mock:8000`, `http://payments-mock:8000` | Where the application finds the two providers |
+
+The user, password and database names are applied when the database is first created, so to change
+them later run `docker compose down -v` (it deletes the data). The examples below use the default
+values; if you change them, use yours.
 
 ## The demo data
 
@@ -219,9 +240,9 @@ stock back. Sending the same request again then answers `409 order_expired`.
 
 ### 5. Look inside the database
 
-The database is published on `localhost:5432`, so you can connect with any client (DBeaver,
-DataGrip, `psql`): database `canals`, user `canals`, password `canals`. Or use the one inside the
-container:
+The database is published on `localhost:5432` (`DB_PORT`), so you can connect with any client (DBeaver,
+DataGrip, `psql`): database, user and password are `POSTGRES_DB`, `POSTGRES_USER` and
+`POSTGRES_PASSWORD` from `.env` (all `canals` by default). Or use the one inside the container:
 
 ```bash
 docker compose exec db psql -U canals -d canals
@@ -240,8 +261,8 @@ and `curl localhost:8102/payments/<payment_id>`.
 
 ## Tests
 
-They run against a real PostgreSQL (the `canals_test` database that `db/init` creates) and the
-mocks, in-process:
+They run against a real PostgreSQL (the database `POSTGRES_TEST_DB`, `canals_test` by default, that
+`db/init` creates) and the mocks, in-process:
 
 ```bash
 docker compose --profile test run --rm tests
