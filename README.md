@@ -8,6 +8,9 @@ orders that were left halfway (a capture that timed out, a payment that never go
 Flask + gunicorn, SQLAlchemy over PostgreSQL. The geocoder and the payment provider are mocks that
 run in their own containers.
 
+**Please read [`orders-service-summary.pdf`](orders-service-summary.pdf)**: it explains the design
+decisions (order states, when stock is reserved and released, failure analysis) and the two mocks.
+
 ## Run it
 
 Needs Docker with Compose. From this folder:
