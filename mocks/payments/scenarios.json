@@ -1,0 +1,48 @@
+{
+  "_comment": "What each test card does. 'outcome' is one of: approve, decline, unavailable (503 before processing), slow (processes, then answers after delay_seconds), reject (capture only). 'affected_attempts' counts attempts per idempotency key, so a later retry with the same key behaves normally.",
+  "default": {
+    "authorize": { "outcome": "approve" },
+    "capture": { "outcome": "approve" }
+  },
+  "cards": {
+    "4242424242424242": {
+      "description": "Everything works"
+    },
+    "4000000000000002": {
+      "description": "Card declined at authorization",
+      "authorize": { "outcome": "decline", "code": "card_declined" }
+    },
+    "4000000000009995": {
+      "description": "Insufficient funds at authorization",
+      "authorize": { "outcome": "decline", "code": "insufficient_funds" }
+    },
+    "4000000000000101": {
+      "description": "Authorize succeeds but the answer is slow for the first 2 attempts (the API times out). A client retry with the same Idempotency-Key gets the original result.",
+      "authorize": { "outcome": "slow", "delay_seconds": 8, "affected_attempts": 2 }
+    },
+    "4000000000000200": {
+      "description": "Authorize answers 503 without processing for the first 2 attempts. A client retry with the same Idempotency-Key succeeds.",
+      "authorize": { "outcome": "unavailable", "affected_attempts": 2 }
+    },
+    "4000000000000309": {
+      "description": "Authorize succeeds but the answer never arrives in time (every attempt is slow). Nobody can capture without the payment id: the order expires and its stock is released.",
+      "authorize": { "outcome": "slow", "delay_seconds": 8, "affected_attempts": 1000000 }
+    },
+    "4000000000000408": {
+      "description": "The provider is down for authorize: always 503.",
+      "authorize": { "outcome": "unavailable", "affected_attempts": 1000000 }
+    },
+    "4000000000000507": {
+      "description": "Authorize works. Capture succeeds but the answer is slow for the first 2 attempts: the order stays AUTHORIZED and the reconciler captures it.",
+      "capture": { "outcome": "slow", "delay_seconds": 8, "affected_attempts": 2 }
+    },
+    "4000000000000606": {
+      "description": "Authorize works but the capture is rejected (the hold is gone): the order fails and its stock is released.",
+      "capture": { "outcome": "reject" }
+    },
+    "4000000000000705": {
+      "description": "Authorize works but capture always answers 503. The order stays AUTHORIZED, never expires, and the reconciler keeps retrying the capture.",
+      "capture": { "outcome": "unavailable", "affected_attempts": 1000000 }
+    }
+  }
+}

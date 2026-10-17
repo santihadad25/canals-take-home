@@ -1,0 +1,105 @@
+name: canals-orders
+
+services:
+  # On its first start, Postgres runs the scripts in db/init: it creates the tables, loads the demo
+  # warehouses with their stock and creates the database the tests use.
+  db:
+    image: postgres:16-alpine
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_USER: canals
+      POSTGRES_PASSWORD: canals
+      POSTGRES_DB: canals
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U canals -d canals"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  geocoding-mock:
+    build: ./mocks/geocoding
+    ports:
+      - "8101:8000"
+    volumes:
+      - ./mocks/geocoding/addresses.json:/app/addresses.json:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  payments-mock:
+    build: ./mocks/payments
+    ports:
+      - "8102:8000"
+    volumes:
+      - ./mocks/payments/scenarios.json:/app/scenarios.json:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # The web API: gunicorn with WEB_CONCURRENCY worker processes, each one with its own threads.
+  # The processes share nothing but the database.
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://canals:canals@db:5432/canals
+      GEOCODING_URL: http://geocoding-mock:8000
+      PAYMENTS_URL: http://payments-mock:8000
+      WEB_CONCURRENCY: "4"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      geocoding-mock:
+        condition: service_healthy
+      payments-mock:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Finishes the orders that were left halfway (captures authorized payments, expires orders that
+  # never got authorized). Safe to scale: docker compose up -d --scale reconciler=3
+  reconciler:
+    build: .
+    command: python -m app.jobs.reconciler
+    environment:
+      DATABASE_URL: postgresql+psycopg://canals:canals@db:5432/canals
+      GEOCODING_URL: http://geocoding-mock:8000
+      PAYMENTS_URL: http://payments-mock:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      geocoding-mock:
+        condition: service_healthy
+      payments-mock:
+        condition: service_healthy
+
+  # Run with: docker compose --profile test run --rm tests
+  tests:
+    profiles: ["test"]
+    build:
+      context: .
+      target: dev
+    command: pytest
+    volumes:
+      - .:/app
+    environment:
+      TEST_DATABASE_URL: postgresql+psycopg://canals:canals@db:5432/canals_test
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,12 @@
+{
+  "addresses": {
+    "Av. Corrientes 1234, Buenos Aires": { "lat": -34.6037, "lon": -58.3816 },
+    "Bv. San Juan 450, Córdoba": { "lat": -31.4135, "lon": -64.1811 },
+    "Bv. Oroño 1000, Rosario": { "lat": -32.9468, "lon": -60.6393 },
+    "Av. San Martín 800, Mendoza": { "lat": -32.8895, "lon": -68.8458 },
+    "Av. Colón 1500, Mar del Plata": { "lat": -38.0023, "lon": -57.5575 }
+  },
+  "unavailable": [
+    "Calle Sin Servicio 1, Buenos Aires"
+  ]
+}
